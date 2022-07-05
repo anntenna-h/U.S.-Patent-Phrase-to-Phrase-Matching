@@ -1,8 +1,5 @@
 # U.S.-Patent-Phrase-to-Phrase-Matching
-Kaggle NLP Competition, 2022
-
-# USPPPM 方案复盘
-
+USPPPM 方案复盘
 by Anntenna & fluentn & cty
 
 ## 赛题分析
