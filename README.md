@@ -92,36 +92,21 @@ Context对应美国专利文本的分类，见titles.csv，information on the me
   >
   >    BERT加入位置信息的方法是在输入embedding中加入postion embedding, pos embedding与char embeding和segment embedding混在一起，这种早期就合并了位置信息在计算self-attention时，表达能力受限，维护信息非常被弱化了。
   >
-  >    ==本文的motivation就是将pos信息拆分出来，单独编码后去和content、和自己求attention==，增加计算 “位置-内容” 和 “内容-位置” 注意力的分散Disentangled Attention。为了更充分利用相对位置信息，输入的input embedding不再加入pos embeding, 而是input在经过transformer编码后，在encoder段与“decoder”段，通过**相对位置**计算**分散注意力**。
+  >    **本文的motivation就是将pos信息拆分出来，单独编码后去和content、和自己求attention**，增加计算 “位置-内容” 和 “内容-位置” 注意力的分散Disentangled Attention。为了更充分利用相对位置信息，输入的input embedding不再加入pos embeding, 而是input在经过transformer编码后，在encoder段与“decoder”段，通过**相对位置**计算**分散注意力**。
   >
   > 
   >
   >    (Disentangled: 每一层都会加入一个不变的相对位置矩阵 $P$ )
   >
-  >    ==解码器前接入了绝对位置embedding，避免只有相对位置而丢失了绝对位置embeding==。
+  >    **解码器前接入了绝对位置embedding，避免只有相对位置而丢失了绝对位置embeding**。
   >
   >    （其实本质就是在原始bert的倒数第二层transform中间层插入了一个分散注意力计算，而BERT是在最开始的时候放绝对位置的，DeBERTa原作怀疑一开始就放绝对位置会有损模型对相对位置的学习）
-  > $$
-  >    \begin{aligned}
-  >    A_{i, j} &=\left\{\boldsymbol{H}_{i}, \boldsymbol{P}_{i \mid j}\right\} \times\left\{\boldsymbol{H}_{j}, \boldsymbol{P}_{j \mid i}\right\}^{\top} \\
-  >    &=\boldsymbol{H}_{i} \boldsymbol{H}_{j}^{\top}+\boldsymbol{H}_{i} \boldsymbol{P}_{j \mid i}^{\top}+\boldsymbol{P}_{i \mid j} \boldsymbol{H}_{j}^{\top}+\boldsymbol{P}_{i \mid j} \boldsymbol{P}_{j \mid i}^{\top}
-  >    \end{aligned}
-  > $$
+  > 
+  >    <a href="https://sm.ms/image/FCVHdSjT7l6iDNk" target="_blank"><img src="https://s2.loli.net/2022/07/05/FCVHdSjT7l6iDNk.png" width=300></a>
+  >
   >    即 $H_i$ 是内容编码，$P_{i \mid j}$ 是 $i$ 相对 $j$ 的位置编码（**相对位置**）。
   >
-  > $$
-  >    \begin{aligned}
-  >    &Q_{c}=H W_{q, c}, K_{c}=H W_{k, c}, V_{c}=H W_{v, c}, Q_{r}=P W_{q, r}, K_{r}=P W_{k, r}\\
-  >    \end{aligned}
-  > $$
-  >
-  > $$
-  >    &\tilde{A}_{i, j}=\underbrace{Q_{i}^{c} K_{j}^{c \top}}_{\text {(a) content-to-content }}+\underbrace{Q_{i}^{c} K_{\delta(i, j)}^{r}}_{\text {(b) content-to-position }}+\underbrace{K_{j}^{c} Q_{\delta(j, i)^{r}}^{\top}}_{\text {(c) position-to-content }}\\
-  > $$
-  >
-  > $$
-  >    \boldsymbol{H}_{\boldsymbol{o}}=\operatorname{softmax}\left(\frac{\tilde{\boldsymbol{A}}}{\sqrt{3 d}}\right) \boldsymbol{V}_{c}
-  > $$
+  >    <a href="https://sm.ms/image/c3edCkBxf6E17lH" target="_blank"><img src="https://s2.loli.net/2022/07/05/c3edCkBxf6E17lH.png" width=600></a>
   >
   >    其中 $Q_c$、$K_c$ 和 $V_c$ 分别是使用投影矩阵$W_{q, c}, W_{k, c}, W_{v, c} \in R^{d \times d}$ 生成的**投影内容向量**；$P \in R^{2 k \times d}$表示跨所有层共享的相对位置嵌入向量(即在正向传播期间保持不变)；$Q_r$ 和 $K_r$分别是使用投影矩阵 $W_{q, r}, \quad W_{k, r} \in R^{d \times d}$ 生成的**投影相对位置向量**。
   >
@@ -133,13 +118,7 @@ Context对应美国专利文本的分类，见titles.csv，information on the me
   >
   >    限制了相对距离，相距大于一个阈值时距离就无效了，此时距离设定为一个常数，距离在有效范围内时，用参数来控制						
   >
-  >    $$
-  >    \delta(i, j)=\left\{\begin{array}{rcl}
-  >    0 & \text { for } & i-j \leqslant-k \\
-  >    2 k-1 & \text { for } & i-j \geqslant k \\
-  >    i-j+k & \text { others. } &
-  >    \end{array}\right.
-  >    $$
+  >    <a href="https://sm.ms/image/hbeMQKnvgczmifX" target="_blank"><img src="https://s2.loli.net/2022/07/05/hbeMQKnvgczmifX.png" width=400></a>
   >
   > 3. **Decoding enhanced decoder**: Relative positional information in transformer, refeed the absolute postional information at the end
   >
@@ -167,9 +146,9 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
 >
 >    随机替换过于简单，作者借鉴GAN的思想，使用一个MLM的Generator-BERT来对输入句子进行更改，然后丢给Discriminator-BERT去判断哪个字被改过。
 >
->    <img src="https://pic4.zhimg.com/80/v2-2d8c42a08e37369b3b504ee006d169a3_720w.jpg" alt="img" style="zoom: 67%;" />
+>    <img src="https://pic4.zhimg.com/80/v2-2d8c42a08e37369b3b504ee006d169a3_720w.jpg" alt="img" width=500 />
 >
->    目标函数：$\min _{\theta_{G}, \theta_{D}} \sum_{x \in \mathcal{X}} \mathcal{L}_{M L M}\left(x, \theta_{G}\right)+\lambda \mathcal{L}_{D i s c}\left(x, \theta_{D}\right)$
+>    目标函数：<a href="https://sm.ms/image/nvmZPkFQsMG7wi2" target="_blank"><img src="https://s2.loli.net/2022/07/05/nvmZPkFQsMG7wi2.png" width=300></a>
 >
 >    小的generator以及discriminator的方式共同训练，并且采用了两者loss相加，使得discriminator的学习难度逐渐地提升，学习到更难的token（plausible tokens）。
 >
@@ -188,9 +167,13 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
 >
 > https://zhuanlan.zhihu.com/p/118135466
 
+
+
 ##### 3.1.3  BERT-for-patent
 
 理解成在专利语料上训练的BERT就可以
+
+
 
 
 
@@ -198,18 +181,17 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
 
 1. 一个BERT
 
-   <img src="D:\Personal Files\学习类\Project\Kaggle\U.S. Patent Phrase to Phrase Matching\USPPPM 方案复盘.assets\image-20220705155332779.png" alt="image-20220705155332779" style="zoom: 67%;" />
+   <a href="https://sm.ms/image/1pOT45Mk3LjAaPX" target="_blank"><img src="https://s2.loli.net/2022/07/05/1pOT45Mk3LjAaPX.png" ></a>
 
 2. 两个BERT
 
-   <img src="D:\Personal Files\学习类\Project\Kaggle\U.S. Patent Phrase to Phrase Matching\USPPPM 方案复盘.assets\image-20220705155354513.png" alt="image-20220705155354513" style="zoom:67%;" />
+   <a href="https://sm.ms/image/unGMzq5F27NHPA8" target="_blank"><img src="https://s2.loli.net/2022/07/05/unGMzq5F27NHPA8.png" ></a>
 
 3. Siamese Network (两个BERT，但是共享权重)
 
-   <img src="D:\Personal Files\学习类\Project\Kaggle\U.S. Patent Phrase to Phrase Matching\USPPPM 方案复盘.assets\image-20220705155408129.png" alt="image-20220705155408129" style="zoom:67%;" />
+   <a href="https://sm.ms/image/JhB79qfz4DlvNSK" target="_blank"><img src="https://s2.loli.net/2022/07/05/JhB79qfz4DlvNSK.png" ></a>
 
 4. Fine-tuned DeBERTa Embedding + LGB （将BERT的输出作为LightGBM的输入）
-
 ### 4  输出词向量
 
 1. CLS
@@ -256,9 +238,8 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
 ### 6  损失函数
 
 - Pearson Loss （直接用Pearson系数作为loss）
-  $$
-  \boldsymbol{r}_{x y}=\frac{\sum((x-\bar{x})(y-\bar{y}))}{\sqrt{\sum(x-\bar{x})^{2} \sum(y-\bar{y})^{2}}}
-  $$
+
+  <a href="https://sm.ms/image/dKR1YbaHfUJAtqG" target="_blank"><img src="https://s2.loli.net/2022/07/05/dKR1YbaHfUJAtqG.png" width =300></a>
 
   ~~~python
   def pearsonr(x, y):
@@ -331,14 +312,13 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
     >    torch.sum(inpt.sigmoid().log()*target + (1-target)*(1-inpt.sigmoid()).log())/3
     >    ~~~
     >
-    >    ![未命名图片](D:\Personal Files\学习类\Project\Kaggle\U.S. Patent Phrase to Phrase Matching\USPPPM 方案复盘.assets\未命名图片.png)
+    >    <a href="https://sm.ms/image/sPw8lL1vYmz5yVN" target="_blank"><img src="https://s2.loli.net/2022/07/05/sPw8lL1vYmz5yVN.png" alt="未命名图片.png" width=650></a>
     >
     > 
 
 - MSE Loss
-  $$
-  M S E=\frac{1}{n} \sum_{i=1}^{n}\left(y_{i}-\widehat{y}_{i}\right)^{2}
-  $$
+  
+  <a href="https://sm.ms/image/DC3LfheEAg9Rpkv" target="_blank"><img src="https://s2.loli.net/2022/07/05/DC3LfheEAg9Rpkv.png" width=230></a>
 
 ## 技巧尝试
 
@@ -381,7 +361,7 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
   >
   >    高频词会集中在头部，离原点近，低频词会集中在尾部，离远点远高频词与低频词分布在不同的区域，那高频词与低频词之间的相似度也就没法计算了。这也反映出来的就是明显的低频词没有得到一个很好的训练。同时，高频词频次高，也会主宰句子表达。
   >
-  >    <img src="https://img-blog.csdnimg.cn/img_convert/b93cc1c528eef25bdf713c94d33a653d.png" alt="b93cc1c528eef25bdf713c94d33a653d.png" style="zoom:50%;" />
+  >    <img src="https://img-blog.csdnimg.cn/img_convert/b93cc1c528eef25bdf713c94d33a653d.png" alt="b93cc1c528eef25bdf713c94d33a653d.png" width=400/>
   >
   >    BERT-whitening 提出通过一个白化的操作直接校正局向量的协方差矩阵，$\widetilde{x}_{i}=\left(x_{i}-\mu\right) W$，问题就变成计算 BERT 向量分布的均值以及协方差。
   >
@@ -399,9 +379,8 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
 
 
   > **对抗训练基本思想：Min-Max公式**
-  > $$
-  > \min _{\theta} \mathbb{E}_{(x, y) \sim \mathcal{D}}\left[\max _{r_{a d v} \in \mathcal{S}} L\left(\theta, x+r_{a d v}, y\right)\right]
-  > $$
+  ><a href="https://sm.ms/image/efvXw9KUMYcuyjm" target="_blank"><img src="https://s2.loli.net/2022/07/05/efvXw9KUMYcuyjm.png" width=250></a>
+  > 
   > 中括号里的含义为我们要找到一组在样本空间内、使Loss最大的的对抗样本（该对抗样本由原样本x和经过某种手段得到的扰动项r_adv共同组合得到）。这样一组样本组成的对抗样本集，它们所体现出的数据分布，就是该中括号中所体现的。
   > 外层min()函数指的则是，我们面对这种数据分布的样本集，要通过对模型参数的更新，使模型在该对抗样本集上的期望loss最小。
   >
@@ -450,7 +429,7 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
   >
   > 
   >
-  > - ==**PGD**== (Projected Gradient Descent) （本次采用的）
+  > - **PGD** (Projected Gradient Descent) （本次采用的，当K=3时，训练时间会增加3倍）
   >
   >   FGM直接通过epsilon参数一下子算出了对抗扰动，这样得到的可能不是最优的。因此PGD进行了改进，多迭代几次，慢慢找到最优的扰动。FGM简单粗暴的“一步到位”，可能走不到约束内的最优点。PGD则是“小步多走”，如果走出了扰动半径为epsilon的空间，就映射回“球面”上，以保证扰动不要过大。
   >
@@ -466,11 +445,11 @@ Efficiently Learning an Encoder that Classifies Token Replacements Accurately
   >
   >   2. 对抗攻击（K步的for循环）：反向传播（计算grad）是为了计算当前embedding权重下的扰动r，同时为了不干扰后序扰动r的计算，还要将每次算出的grad清零。
   >
-  >      a.  如果是首步，先保存一下未经attack的grad。然后按照PGD公式以及当前embedding层的grad计算扰动，然后将扰动累加到embedding权重上；
+  >      1)  如果是首步，先保存一下未经attack的grad。然后按照PGD公式以及当前embedding层的grad计算扰动，然后将扰动累加到embedding权重上；
   >
-  >      b.  非第K-1步时：模型当前梯度清零；
+  >      2)  非第K-1步时：模型当前梯度清零；
   >
-  >      c.  到了第K-1步时：恢复到step-1时备份的梯度（因为梯度在数次backward中已被修改）；
+  >      3)  到了第K-1步时：恢复到step-1时备份的梯度（因为梯度在数次backward中已被修改）；
   >
   >   3. 使用目前的模型参数（包括被attack后的embedding权重）以及batch_input，做前后向传播，得到adv_loss、更新grad
   >
